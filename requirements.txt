@@ -9,6 +9,3 @@ plotly==5.18.0
 schedule==1.2.1
 lxml==5.1.0
 html5lib==1.1
-python-telegram-bot
-discord-webhook
-requests

@@ -25,144 +25,82 @@
 #             return True
 #         except Exception as e:
 #             print(f"Error sending WhatsApp alert: {str(e)}")
-#  
+#             return False
 # utils/notifications.py
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
-import telegram
-import discord_webhook
-import requests
+import os
 from config.config import Config
-import asyncio
-import aiohttp
 
 class NotificationManager:
     def __init__(self):
-        # Twilio setup
-        self.twilio_client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
-        self.twilio_number = Config.TWILIO_PHONE_NUMBER
-        
-        # Telegram setup
-        self.telegram_bot = telegram.Bot(token=Config.TELEGRAM_BOT_TOKEN)
-        
-        # Discord setup
-        self.discord_webhook_url = Config.DISCORD_WEBHOOK_URL
-        
-        # Pushbullet setup
-        self.pushbullet_api_key = Config.PUSHBULLET_API_KEY
-
-    async def send_telegram_message(self, chat_id, message):
-        """Send message via Telegram"""
-        try:
-            await self.telegram_bot.send_message(chat_id=chat_id, text=message, parse_mode='HTML')
-            return True
-        except Exception as e:
-            print(f"Telegram error: {str(e)}")
-            return False
-
-    def send_discord_message(self, message):
-        """Send message via Discord webhook"""
-        try:
-            webhook = discord_webhook.DiscordWebhook(url=self.discord_webhook_url, content=message)
-            webhook.execute()
-            return True
-        except Exception as e:
-            print(f"Discord error: {str(e)}")
-            return False
-
-    def send_pushbullet_notification(self, title, message):
-        """Send notification via Pushbullet"""
-        try:
-            headers = {
-                'Access-Token': self.pushbullet_api_key,
-                'Content-Type': 'application/json'
-            }
-            data = {
-                'type': 'note',
-                'title': title,
-                'body': message
-            }
-            response = requests.post(
-                'https://api.pushbullet.com/v2/pushes',
-                headers=headers,
-                json=data
-            )
-            return response.status_code == 200
-        except Exception as e:
-            print(f"Pushbullet error: {str(e)}")
-            return False
+        self.client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+        self.from_number = Config.TWILIO_PHONE_NUMBER
 
     def send_whatsapp_message(self, to_number, message):
         """Send a WhatsApp message using Twilio"""
         try:
-            from_number = f'whatsapp:{self.twilio_number}' if not self.twilio_number.startswith('whatsapp:') else self.twilio_number
-            to_number = f'whatsapp:{to_number}' if not to_number.startswith('whatsapp:') else to_number
+            # Format the 'from' number if needed
+            if not self.from_number.startswith('whatsapp:'):
+                from_number = f'whatsapp:{self.from_number}'
+            else:
+                from_number = self.from_number
 
-            message = self.twilio_client.messages.create(
+            # Format the 'to' number if needed
+            if not to_number.startswith('whatsapp:'):
+                to_number = f'whatsapp:{to_number}'
+
+            # Print debug information
+            print(f"Sending WhatsApp message:")
+            print(f"From: {from_number}")
+            print(f"To: {to_number}")
+            print(f"Message: {message[:100]}...")  # First 100 chars of message
+
+            # Send the message
+            message = self.client.messages.create(
                 from_=from_number,
                 body=message,
                 to=to_number
             )
+
+            # Print success information
+            print(f"Message sent successfully! SID: {message.sid}")
             return True
+
+        except TwilioRestException as e:
+            print(f"Twilio error: {str(e)}")
+            if e.code == 21614:
+                print("Recipient has not opted in to your WhatsApp sandbox")
+            elif e.code == 20003:
+                print("Authentication error. Check your Twilio credentials")
+            elif e.code == 21211:
+                print("Invalid 'To' phone number format")
+            return False
         except Exception as e:
-            print(f"WhatsApp error: {str(e)}")
+            print(f"Error sending WhatsApp message: {str(e)}")
             return False
 
-    async def send_notification(self, message, notification_methods, user_info):
-        """Send notification through multiple channels"""
-        results = []
-        
-        if 'whatsapp' in notification_methods and user_info.get('phone'):
-            results.append(('WhatsApp', self.send_whatsapp_message(user_info['phone'], message)))
-            
-        if 'telegram' in notification_methods and user_info.get('telegram_chat_id'):
-            results.append(('Telegram', await self.send_telegram_message(user_info['telegram_chat_id'], message)))
-            
-        if 'discord' in notification_methods and user_info.get('discord_webhook'):
-            results.append(('Discord', self.send_discord_message(message)))
-            
-        if 'pushbullet' in notification_methods and user_info.get('pushbullet_email'):
-            results.append(('Pushbullet', self.send_pushbullet_notification("IPO Alert", message)))
-            
-        return results
+    def send_ipo_alert(self, to_number, ipo_details):
+        """Send an IPO alert message"""
+        message = f"""🚨 IPO Alert!
 
-    def test_connections(self):
-        """Test all notification connections"""
-        results = {
-            'whatsapp': False,
-            'telegram': False,
-            'discord': False,
-            'pushbullet': False
-        }
-        
+IPO: {ipo_details['name']}
+Gain: {ipo_details['gain']}%
+Price: ₹{ipo_details['price']}
+GMP: ₹{ipo_details['gmp']}
+Type: {ipo_details['type']}
+
+Stay tuned for more updates!"""
+
+        return self.send_whatsapp_message(to_number, message)
+
+    def test_connection(self):
+        """Test Twilio connection and credentials"""
         try:
-            # Test Twilio
-            account = self.twilio_client.api.accounts(Config.TWILIO_ACCOUNT_SID).fetch()
-            results['whatsapp'] = True
-        except:
-            pass
-
-        try:
-            # Test Telegram
-            asyncio.run(self.telegram_bot.get_me())
-            results['telegram'] = True
-        except:
-            pass
-
-        try:
-            # Test Discord
-            webhook = discord_webhook.DiscordWebhook(url=self.discord_webhook_url, content="Test")
-            webhook.execute()
-            results['discord'] = True
-        except:
-            pass
-
-        try:
-            # Test Pushbullet
-            headers = {'Access-Token': self.pushbullet_api_key}
-            response = requests.get('https://api.pushbullet.com/v2/users/me', headers=headers)
-            results['pushbullet'] = response.status_code == 200
-        except:
-            pass
-
-        return results
+            # Try to fetch account details
+            account = self.client.api.accounts(Config.TWILIO_ACCOUNT_SID).fetch()
+            print(f"Successfully connected to Twilio account: {account.friendly_name}")
+            return True
+        except Exception as e:
+            print(f"Failed to connect to Twilio: {str(e)}")
+            return False
