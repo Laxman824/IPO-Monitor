@@ -236,3 +236,40 @@ class Database:
         
         conn.close()
         return stats
+# utils/database.py (add these methods)
+
+class Database:
+    def add_pending_subscriber(self, phone, name, preferences):
+        """Add subscriber in pending state"""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        try:
+            c.execute('''INSERT INTO subscribers 
+                        (phone, name, gain_threshold, preferences, status)
+                        VALUES (?, ?, ?, ?, 'pending')''',
+                     (phone, name, preferences['gain_threshold'], 
+                      json.dumps(preferences)))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error adding pending subscriber: {str(e)}")
+            return False
+        finally:
+            conn.close()
+
+    def approve_subscriber(self, phone):
+        """Approve a pending subscriber"""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        try:
+            c.execute('''UPDATE subscribers 
+                        SET status = 'active', 
+                            approved_at = CURRENT_TIMESTAMP
+                        WHERE phone = ?''', (phone,))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error approving subscriber: {str(e)}")
+            return False
+        finally:
+            conn.close()
