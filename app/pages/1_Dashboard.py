@@ -161,11 +161,28 @@ from utils.notifications import NotificationManager
 import plotly.express as px
 from datetime import datetime
 
+# In your dashboard.py, modify the show_subscriber_form function:
+
 def show_subscriber_form():
     st.subheader("Subscribe to IPO Alerts")
     
     db = Database()
     notification_manager = NotificationManager()
+    
+    # Add Twilio verification before showing form
+    with st.expander("ℹ️ Check WhatsApp Connection", expanded=False):
+        if st.button("Test WhatsApp Connection"):
+            verification = notification_manager.verify_credentials()
+            if verification["status"] == "success":
+                st.success(verification["message"])
+                # Show WhatsApp sandbox instructions
+                st.info("""To receive alerts:
+                1. Save this number in your contacts: {}
+                2. Send "join <your-sandbox-code>" to this number on WhatsApp
+                3. Wait for confirmation before subscribing""".format(Config.TWILIO_PHONE_NUMBER))
+            else:
+                st.error(verification["message"])
+                return  # Don't show form if verification fails
     
     with st.form("subscriber_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -187,8 +204,19 @@ def show_subscriber_form():
             }
             
             try:
-                if db.add_subscriber(phone, name, gain_threshold, preferences):
-                    welcome_message = f"""Welcome to IPO GMP Monitor! 🎉
+                # Format phone number if needed
+                if not phone.startswith('+'):
+                    phone = f'+{phone}'
+                
+                # Try to send test message
+                result = notification_manager.send_whatsapp_message(
+                    phone,
+                    "🔄 Testing WhatsApp connection..."
+                )
+                
+                if result["status"] == "success":
+                    if db.add_subscriber(phone, name, gain_threshold, preferences):
+                        welcome_message = f"""Welcome to IPO GMP Monitor! 🎉
 
 Hi {name},
 
@@ -199,16 +227,19 @@ You've been successfully subscribed with:
 You'll receive alerts when IPOs match your criteria.
 To stop receiving alerts, reply STOP."""
 
-                    if notification_manager.send_whatsapp_message(phone, welcome_message):
-                        st.success("✅ Successfully subscribed! Check your WhatsApp for confirmation.")
-                        st.session_state.show_form = False  # Hide form after success
+                        send_result = notification_manager.send_whatsapp_message(phone, welcome_message)
+                        if send_result["status"] == "success":
+                            st.success("✅ Successfully subscribed! Check your WhatsApp for confirmation.")
+                            st.session_state.show_form = False
+                        else:
+                            st.warning(f"Added to database but WhatsApp message failed: {send_result['message']}")
                     else:
-                        st.warning("Added to database but failed to send WhatsApp message. Check your number.")
+                        st.error("Failed to add to database.")
                 else:
-                    st.error("Failed to add subscriber.")
+                    st.error(f"WhatsApp error: {result['message']}")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
-
+                
 def render_dashboard():
     st.title("📈 IPO GMP Monitor")
     
