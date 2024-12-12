@@ -161,8 +161,6 @@ from utils.notifications import NotificationManager
 import plotly.express as px
 from datetime import datetime
 
-# In your dashboard.py, modify the show_subscriber_form function:
-
 def show_subscriber_form():
     st.subheader("Subscribe to IPO Alerts")
     
@@ -239,6 +237,7 @@ To stop receiving alerts, reply STOP."""
                     st.error(f"WhatsApp error: {result['message']}")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
+
                 
 def render_dashboard():
     st.title("📈 IPO GMP Monitor")
