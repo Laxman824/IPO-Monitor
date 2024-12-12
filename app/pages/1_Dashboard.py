@@ -164,29 +164,41 @@ from datetime import datetime
 def show_subscriber_form():
     st.subheader("Subscribe to IPO Alerts")
     
-    db = Database()
-    notification_manager = NotificationManager()
-    
-    with st.form("subscriber_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("Full Name")
-            phone = st.text_input("WhatsApp Number (e.g., +919876543210)")
-        with col2:
-            gain_threshold = st.slider("Gain Threshold (%)", 0, 100, 50)
-            alert_frequency = st.selectbox(
-                "Alert Frequency",
-                ["Immediate", "Daily", "Weekly"]
-            )
+    try:
+        db = Database()
+        notification_manager = NotificationManager()
         
-        submitted = st.form_submit_button("Subscribe Now")
-        if submitted and name and phone:
-            preferences = {
-                "gain_threshold": gain_threshold,
-                "alert_frequency": alert_frequency
-            }
+        # Verify Twilio setup first
+        verify_result = notification_manager.verify_credentials()
+        if verify_result["status"] != "success":
+            st.error(f"Twilio setup error: {verify_result['message']}")
+            st.info("Please contact administrator to fix the Twilio configuration.")
+            return
+        
+        with st.form("subscriber_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                name = st.text_input("Full Name")
+                phone = st.text_input("WhatsApp Number (e.g., +919876543210)")
+            with col2:
+                gain_threshold = st.slider("Gain Threshold (%)", 0, 100, 50)
+                alert_frequency = st.selectbox(
+                    "Alert Frequency",
+                    ["Immediate", "Daily", "Weekly"]
+                )
             
-            try:
+            submitted = st.form_submit_button("Subscribe Now")
+            if submitted:
+                if not name or not phone:
+                    st.error("Please fill in all required fields!")
+                    return
+                    
+                preferences = {
+                    "gain_threshold": gain_threshold,
+                    "alert_frequency": alert_frequency
+                }
+                
+                # First add to database
                 if db.add_subscriber(phone, name, gain_threshold, preferences):
                     welcome_message = f"""Welcome to IPO GMP Monitor! 🎉
 
@@ -199,15 +211,29 @@ You've been successfully subscribed with:
 You'll receive alerts when IPOs match your criteria.
 To stop receiving alerts, reply STOP."""
 
-                    if notification_manager.send_whatsapp_message(phone, welcome_message):
+                    # Send WhatsApp message
+                    result = notification_manager.send_whatsapp_message(phone, welcome_message)
+                    
+                    if result["status"] == "success":
                         st.success("✅ Successfully subscribed! Check your WhatsApp for confirmation.")
-                        st.session_state.show_form = False  # Hide form after success
+                        st.session_state.show_form = False
                     else:
-                        st.warning("Added to database but failed to send WhatsApp message. Check your number.")
+                        st.warning(f"""Added to database but couldn't send WhatsApp message:
+                        {result['message']}
+                        
+                        Please make sure:
+                        1. Your phone number is correct
+                        2. You've joined the WhatsApp sandbox
+                        3. Contact support if the issue persists""")
                 else:
-                    st.error("Failed to add subscriber.")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+                    st.error("Failed to add subscriber to database.")
+                    
+    except ValueError as ve:
+        st.error(f"Configuration Error: {str(ve)}")
+        st.info("Please contact administrator to fix the configuration.")
+    except Exception as e:
+        st.error(f"Unexpected error: {str(e)}")
+        st.info("Please try again later or contact support.")
 
 def render_dashboard():
     st.title("📈 IPO GMP Monitor")
