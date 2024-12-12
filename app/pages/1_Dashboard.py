@@ -350,7 +350,7 @@ def render_dashboard():
     # Footer
     st.markdown("""
     <div style="text-align: center; padding: 2rem;">
-        <p style="color: #666;">Made with ❤️ by Your Company</p>
+        <p style="color: #666;">Made with ❤️ by Laxman</p>
     </div>
     """, unsafe_allow_html=True)
 
