@@ -230,7 +230,7 @@ Thank you for subscribing! 🙏"""
         st.error(f"Error loading subscribers: {str(e)}")
 
 if __name__ == "__main__":
-#     render_subscribers()
+    render_subscribers()
 # pages/2_Subscribers.py
 # import streamlit as st
 # from utils.database import Database
