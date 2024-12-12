@@ -279,98 +279,62 @@
 
 
 # utils/database.py
+# utils/database.py
 import sqlite3
 import pandas as pd
 import json
 from datetime import datetime
-from config.config import Config
+import logging
 
 class Database:
     def __init__(self):
-        self.db_path = Config.DATABASE_PATH
-        self._setup_database()  # Call setup during initialization
-
+        self.db_path = 'ipo_monitor.db'
+        self._setup_database()
+        
     def _setup_database(self):
         """Initialize database tables"""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         
-        # Create subscribers table
         c.execute('''CREATE TABLE IF NOT EXISTS subscribers
                     (phone TEXT PRIMARY KEY,
                      name TEXT NOT NULL,
                      gain_threshold INTEGER DEFAULT 50,
                      preferences TEXT,
-                     status TEXT DEFAULT 'pending',
                      active BOOLEAN DEFAULT 1,
                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     approved_at TIMESTAMP,
-                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     last_notified TIMESTAMP,
-                     notification_count INTEGER DEFAULT 0)''')
-        
-        # Create sent_alerts table
-        c.execute('''CREATE TABLE IF NOT EXISTS sent_alerts
-                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     ipo_name TEXT NOT NULL,
-                     phone TEXT NOT NULL,
-                     alert_type TEXT NOT NULL,
-                     alert_message TEXT,
-                     gain_percentage REAL,
-                     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     status TEXT,
-                     FOREIGN KEY (phone) REFERENCES subscribers(phone))''')
-        
-        # Create IPO tracking table
-        c.execute('''CREATE TABLE IF NOT EXISTS ipo_tracking
-                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     ipo_name TEXT NOT NULL,
-                     current_gmp INTEGER,
-                     previous_gmp INTEGER,
-                     gain_percentage REAL,
-                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     status TEXT DEFAULT 'active')''')
-        
-        # Create system logs table
-        c.execute('''CREATE TABLE IF NOT EXISTS system_logs
-                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     log_type TEXT NOT NULL,
-                     message TEXT NOT NULL,
-                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        
+                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+                     
         conn.commit()
         conn.close()
-
+        
     def add_subscriber(self, phone, name, threshold=50, preferences=None):
-        """Add or update a subscriber"""
+        """Add a new subscriber"""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             preferences_json = json.dumps(preferences) if preferences else '{}'
             
             c.execute('''INSERT OR REPLACE INTO subscribers 
-                        (phone, name, gain_threshold, preferences, status, active, updated_at)
-                        VALUES (?, ?, ?, ?, 'pending', 1, ?)''',
+                        (phone, name, gain_threshold, preferences, active, updated_at)
+                        VALUES (?, ?, ?, ?, 1, ?)''',
                      (phone, name, threshold, preferences_json, datetime.now()))
             
-            self.log_activity('INFO', f'Added/Updated subscriber: {name} ({phone})')
             conn.commit()
             return True
         except Exception as e:
-            self.log_activity('ERROR', f'Failed to add subscriber: {str(e)}')
+            logging.error(f"Failed to add subscriber: {str(e)}")
             return False
         finally:
             conn.close()
-
-    def get_subscribers(self, status=None, active_only=True):
-        """Get subscriber list with optional filtering"""
+            
+    def get_subscribers(self, active_only=True):
+        """Get list of subscribers"""
         conn = sqlite3.connect(self.db_path)
-        query = "SELECT * FROM subscribers WHERE 1=1"
+        query = "SELECT * FROM subscribers"
         if active_only:
-            query += " AND active = 1"
-        if status:
-            query += f" AND status = '{status}'"
-        
+            query += " WHERE active = 1"
+            
         df = pd.read_sql_query(query, conn)
         conn.close()
         
@@ -378,47 +342,21 @@ class Database:
             df['preferences'] = df['preferences'].apply(
                 lambda x: json.loads(x) if x else {})
         return df
-
-    def approve_subscriber(self, phone):
-        """Approve a pending subscriber"""
+        
+    def deactivate_subscriber(self, phone):
+        """Deactivate a subscriber"""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             c.execute('''UPDATE subscribers 
-                        SET status = 'active',
-                            approved_at = ?,
-                            updated_at = ?
-                        WHERE phone = ?''',
-                     (datetime.now(), datetime.now(), phone))
-            
-            self.log_activity('INFO', f'Subscriber approved: {phone}')
+                        SET active = 0, 
+                            updated_at = ? 
+                        WHERE phone = ?''', 
+                     (datetime.now(), phone))
             conn.commit()
             return True
         except Exception as e:
-            self.log_activity('ERROR', f'Failed to approve subscriber: {str(e)}')
+            logging.error(f"Failed to deactivate subscriber: {str(e)}")
             return False
         finally:
             conn.close()
-
-    def log_activity(self, log_type, message):
-        """Log system activity"""
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        try:
-            c.execute('''INSERT INTO system_logs (log_type, message)
-                        VALUES (?, ?)''', (log_type, message))
-            conn.commit()
-        except Exception as e:
-            print(f"Failed to log activity: {str(e)}")
-        finally:
-            conn.close()
-
-    def get_system_logs(self, limit=100):
-        """Get recent system logs"""
-        conn = sqlite3.connect(self.db_path)
-        query = f'''SELECT * FROM system_logs 
-                   ORDER BY created_at DESC 
-                   LIMIT {limit}'''
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-        return df

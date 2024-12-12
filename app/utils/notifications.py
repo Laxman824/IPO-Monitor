@@ -107,63 +107,72 @@
 #             print(f"Failed to connect to Twilio: {str(e)}")
 #             return False
 # utils/notifications.py
+# utils/notifications.py
 from twilio.rest import Client
 from config.config import Config
-import time
+import logging
 
 class NotificationManager:
     def __init__(self):
-        self.client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
-        self.from_number = Config.TWILIO_PHONE_NUMBER
-        self.owner_number = Config.OWNER_WHATSAPP_NUMBER  # Add this to your .env
-
-    def send_approval_request(self, subscriber_name, subscriber_phone, preferences):
-        """Send approval request to owner"""
-        approval_message = f"""🔔 New Subscriber Request
-
-Name: {subscriber_name}
-Phone: {subscriber_phone}
-Preferences:
-- Gain Threshold: {preferences['gain_threshold']}%
-- Alert Frequency: {preferences['alert_frequency']}
-
-Reply with:
-YES {subscriber_phone} to approve
-NO {subscriber_phone} to reject"""
-
         try:
-            # Send message to owner
-            message = self.client.messages.create(
-                from_=f'whatsapp:{self.from_number}',
-                body=approval_message,
-                to=f'whatsapp:{self.owner_number}'
-            )
-            return True
+            self.client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+            self.from_number = Config.TWILIO_PHONE_NUMBER
+            logging.info("Twilio client initialized successfully")
         except Exception as e:
-            print(f"Error sending approval request: {str(e)}")
+            logging.error(f"Failed to initialize Twilio client: {str(e)}")
+            raise
+
+    def send_whatsapp_message(self, to_number, message):
+        """Send a WhatsApp message"""
+        try:
+            # Format phone numbers
+            if not self.from_number.startswith('whatsapp:'):
+                from_number = f'whatsapp:{self.from_number}'
+            else:
+                from_number = self.from_number
+
+            if not to_number.startswith('whatsapp:'):
+                to_number = f'whatsapp:{to_number}'
+
+            # Send message
+            message = self.client.messages.create(
+                from_=from_number,
+                body=message,
+                to=to_number
+            )
+            
+            logging.info(f"Message sent successfully. SID: {message.sid}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to send WhatsApp message: {str(e)}")
             return False
 
-    def notify_subscriber_status(self, phone, name, approved=True):
-        """Notify subscriber of their approval status"""
-        if approved:
-            message = f"""✅ Welcome to IPO Monitor, {name}!
-
-Your subscription has been approved. You'll start receiving IPO alerts based on your preferences.
-
-To stop receiving alerts, reply STOP."""
-        else:
-            message = f"""❌ Hello {name},
-
-Your subscription request was not approved at this time.
-Please contact support for more information."""
-
+    def send_ipo_alert(self, to_number, ipo_details):
+        """Send IPO alert message"""
         try:
-            self.client.messages.create(
-                from_=f'whatsapp:{self.from_number}',
-                body=message,
-                to=f'whatsapp:{phone}'
-            )
+            message = f"""🚨 IPO Alert!
+
+IPO: {ipo_details['name']}
+Gain: {ipo_details['gain']}%
+Price: ₹{ipo_details['price']}
+GMP: ₹{ipo_details['gmp']}
+Type: {ipo_details['type']}
+
+Stay tuned for more updates!"""
+
+            return self.send_whatsapp_message(to_number, message)
+            
+        except Exception as e:
+            logging.error(f"Failed to send IPO alert: {str(e)}")
+            return False
+
+    def test_connection(self):
+        """Test Twilio connection"""
+        try:
+            account = self.client.api.accounts(Config.TWILIO_ACCOUNT_SID).fetch()
+            logging.info(f"Connected to Twilio account: {account.friendly_name}")
             return True
         except Exception as e:
-            print(f"Error notifying subscriber: {str(e)}")
+            logging.error(f"Failed to connect to Twilio: {str(e)}")
             return False
