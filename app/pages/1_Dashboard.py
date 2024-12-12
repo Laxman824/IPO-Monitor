@@ -325,12 +325,39 @@ def create_charts(df):
         )
         st.plotly_chart(fig2, use_container_width=True)
 
+# def show_subscriber_form():
+#     """Display subscription form with enhanced UI"""
+#     st.markdown("### 📱 Subscribe to IPO Alerts")
+    
+#     db = Database()
+#     notification_manager = NotificationManager()
+    
+#     with st.form("subscriber_form", clear_on_submit=True):
+#         col1, col2 = st.columns(2)
+#         with col1:
+#             name = st.text_input("Full Name", placeholder="Enter your name")
+#             phone = st.text_input("WhatsApp Number", placeholder="+919876543210")
+#         with col2:
+#             gain_threshold = st.slider("Gain Threshold (%)", 0, 100, 50)
+#             alert_frequency = st.selectbox(
+#                 "Alert Frequency",
+#                 ["Immediate", "Daily", "Weekly"]
+#             )
+        
+#         # Custom styled submit button
+#         submitted = st.form_submit_button("Subscribe Now", 
+#                                         help="Click to subscribe for IPO alerts")
+#         if submitted and name and phone:
+#             # Process subscription...
+#             pass
 def show_subscriber_form():
-    """Display subscription form with enhanced UI"""
     st.markdown("### 📱 Subscribe to IPO Alerts")
     
     db = Database()
     notification_manager = NotificationManager()
+    
+    # Request push notification permission
+    notification_manager.request_push_permission()
     
     with st.form("subscriber_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -343,14 +370,70 @@ def show_subscriber_form():
                 "Alert Frequency",
                 ["Immediate", "Daily", "Weekly"]
             )
+            
+        # Notification preferences
+        st.write("Notification Preferences")
+        col1, col2 = st.columns(2)
+        with col1:
+            enable_whatsapp = st.checkbox("WhatsApp Notifications", value=True)
+            enable_push = st.checkbox("Browser Push Notifications", value=True)
+        with col2:
+            st.info("Browser notifications will appear on your desktop/mobile")
         
-        # Custom styled submit button
-        submitted = st.form_submit_button("Subscribe Now", 
-                                        help="Click to subscribe for IPO alerts")
+        submitted = st.form_submit_button("Subscribe Now")
         if submitted and name and phone:
-            # Process subscription...
-            pass
-
+            preferences = {
+                "gain_threshold": gain_threshold,
+                "alert_frequency": alert_frequency,
+                "notifications": {
+                    "whatsapp": enable_whatsapp,
+                    "push": enable_push
+                }
+            }
+            
+            try:
+                # Add subscriber to database
+                subscriber_id = db.add_subscriber(phone, name, gain_threshold, preferences)
+                
+                if subscriber_id:
+                    success_messages = []
+                    error_messages = []
+                    
+                    # Send welcome notifications based on preferences
+                    if enable_whatsapp:
+                        whatsapp_result = notification_manager.send_whatsapp_message(
+                            phone,
+                            f"Welcome to IPO GMP Monitor, {name}! You'll receive alerts when IPOs match your criteria."
+                        )
+                        if whatsapp_result['status'] == 'success':
+                            success_messages.append("✅ WhatsApp notifications enabled")
+                        else:
+                            error_messages.append(f"❌ WhatsApp setup failed: {whatsapp_result['message']}")
+                    
+                    if enable_push:
+                        push_result = notification_manager.send_push_notification(
+                            "Welcome to IPO Monitor!",
+                            f"Hi {name}, you'll receive alerts for IPOs with {gain_threshold}%+ gains.",
+                            subscriber_id
+                        )
+                        if push_result['status'] == 'success':
+                            success_messages.append("✅ Browser notifications enabled")
+                        else:
+                            error_messages.append(f"❌ Browser notifications failed: {push_result['message']}")
+                    
+                    # Show results
+                    if success_messages:
+                        st.success("\n".join(success_messages))
+                    if error_messages:
+                        st.warning("\n".join(error_messages))
+                        
+                    st.session_state.show_form = False
+                    
+                else:
+                    st.error("Failed to add subscriber to database.")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                st.info("Please try again or contact support.")
 def render_dashboard():
     st.set_page_config(page_title="IPO Monitor", 
                       page_icon="📈",
