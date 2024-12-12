@@ -229,7 +229,6 @@
 # if __name__ == "__main__":
 #     render_subscribers()
 # pages/2_Subscribers.py
-# pages/2_Subscribers.py
 import streamlit as st
 from utils.database import Database
 from utils.notifications import NotificationManager
@@ -240,7 +239,6 @@ def render_subscribers():
     db = Database()
     notification_manager = NotificationManager()
     
-    # Add subscriber form
     with st.form("new_subscriber", clear_on_submit=True):
         name = st.text_input("Full Name")
         phone = st.text_input("WhatsApp Number (e.g., +919876543210)")
@@ -253,64 +251,42 @@ def render_subscribers():
         
         submitted = st.form_submit_button("Request Subscription")
         if submitted and name and phone:
-            # Prepare preferences
             preferences = {
                 "gain_threshold": gain_threshold,
                 "alert_frequency": alert_frequency
             }
             
-            try:
-                # Add subscriber directly to database
-                if db.add_subscriber(phone, name, gain_threshold, preferences):
-                    # Send welcome message via WhatsApp
-                    welcome_message = f"""Welcome to IPO GMP Monitor! 🎉
-
-Hi {name},
-
-You've been successfully subscribed with:
-- Gain Threshold: {gain_threshold}%
-- Alert Frequency: {alert_frequency}
-
-You'll receive alerts when IPOs match your criteria.
-To stop receiving alerts, reply STOP."""
-
-                    if notification_manager.send_whatsapp_message(phone, welcome_message):
-                        st.success("✅ Successfully subscribed! Check your WhatsApp for confirmation.")
-                    else:
-                        st.warning("Added to database but failed to send WhatsApp message. Check your number.")
+            # Send approval request to owner
+            if notification_manager.send_approval_request(name, phone, preferences):
+                # Add to pending subscribers
+                if db.add_pending_subscriber(phone, name, preferences):
+                    st.success("""✅ Subscription request sent!
+                    
+                    The owner will review your request and you'll receive a confirmation message on WhatsApp.""")
                 else:
-                    st.error("Failed to add subscriber to database.")
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-    
-    # Display current subscribers
-    st.markdown("---")
-    st.subheader("Current Subscribers")
-    
-    try:
-        subscribers = db.get_subscribers()
-        if not subscribers.empty:
-            for _, sub in subscribers.iterrows():
+                    st.error("Failed to process request. Please try again.")
+            else:
+                st.error("Failed to send approval request. Please try again.")
+
+    # Show pending subscribers to owner
+    if st.session_state.get('is_owner', False):  # Add owner authentication as needed
+        st.markdown("---")
+        st.subheader("Pending Approvals")
+        pending = db.get_subscribers(status='pending')
+        if not pending.empty:
+            for _, sub in pending.iterrows():
                 with st.expander(f"📱 {sub['name']} ({sub['phone']})"):
                     col1, col2 = st.columns([3,1])
                     with col1:
                         st.write(f"**Name:** {sub['name']}")
                         st.write(f"**Phone:** {sub['phone']}")
                         st.write(f"**Threshold:** {sub['gain_threshold']}%")
-                        if 'preferences' in sub and sub['preferences']:
-                            st.write("**Preferences:**")
-                            for key, value in sub['preferences'].items():
-                                st.write(f"- {key}: {value}")
                     with col2:
-                        if st.button("Remove", key=f"remove_{sub['phone']}"):
-                            if db.deactivate_subscriber(sub['phone']):
-                                st.success("Subscriber removed!")
+                        if st.button("Approve", key=f"approve_{sub['phone']}"):
+                            if db.approve_subscriber(sub['phone']):
+                                notification_manager.notify_subscriber_status(
+                                    sub['phone'], sub['name'], approved=True)
+                                st.success("Subscriber approved!")
                                 st.rerun()
         else:
-            st.info("No subscribers found. Add your first subscriber above!")
-            
-    except Exception as e:
-        st.error(f"Error loading subscribers: {str(e)}")
-
-if __name__ == "__main__":
-    render_subscribers()
+            st.info("No pending approvals")

@@ -177,40 +177,6 @@ Full details: {dashboard_link}""",
             json.dump(config, f, indent=4)
         
         st.success("✅ Settings saved successfully!")
-# Add to pages/3_Settings.py
 
-def check_twilio_setup():
-    st.subheader("🔧 Twilio Configuration Check")
-    
-    with st.expander("Debug Twilio Setup", expanded=True):
-        st.write("Current Configuration:")
-        
-        # Check if credentials exist
-        if not Config.TWILIO_ACCOUNT_SID:
-            st.error("❌ TWILIO_ACCOUNT_SID is missing")
-        else:
-            st.success(f"✅ TWILIO_ACCOUNT_SID: ...{Config.TWILIO_ACCOUNT_SID[-4:]}")
-            
-        if not Config.TWILIO_AUTH_TOKEN:
-            st.error("❌ TWILIO_AUTH_TOKEN is missing")
-        else:
-            st.success("✅ TWILIO_AUTH_TOKEN is set")
-            
-        if not Config.TWILIO_PHONE_NUMBER:
-            st.error("❌ TWILIO_PHONE_NUMBER is missing")
-        else:
-            st.success(f"✅ TWILIO_PHONE_NUMBER: {Config.TWILIO_PHONE_NUMBER}")
-        
-        if st.button("Test Twilio Connection"):
-            try:
-                notification_manager = NotificationManager()
-                result = notification_manager.verify_credentials()
-                
-                if result["status"] == "success":
-                    st.success(f"✅ Successfully connected to Twilio account: {result['account_name']}")
-                else:
-                    st.error(f"❌ Failed to connect: {result['message']}")
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
 if __name__ == "__main__":
     render_settings()
