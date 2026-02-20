@@ -1264,7 +1264,7 @@ def _render_data_tabs(df):
         with st.expander("📄 Raw Data Table"):
             st.dataframe(
                 filtered.style.format({"Gain": "{:+.1f}%"})
-                .background_gradient(subset=["Gain"], cmap="RdYlGn"),
+                # .background_gradient(subset=["Gain"], cmap="RdYlGn"),
                 use_container_width=True,
                 hide_index=True,
             )
