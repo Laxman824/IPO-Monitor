@@ -53,17 +53,19 @@ class IPOScraper:
                 print(df.head())
                 
                 # Clean and standardize column names
-                expected_columns = ['Current IPOs', 'IPO GMP', 'IPO Price', 'Gain', 
-                                 'Kostak', 'Subject', 'Type']
+                # Updated to match current website structure
+                expected_columns = ['Current IPOs', 'IPO GMP', 'IPO Price', 'Gain', 'Date']
                 
                 if len(df.columns) >= len(expected_columns):
-                    df.columns = expected_columns + list(df.columns[len(expected_columns):])
+                    df.columns = expected_columns
                     
-                    # Data cleaning
+                    # Data cleaning for new format
                     df['Gain'] = df['Gain'].astype(str).str.extract(r'(-?\d+(?:\.\d+)?)', expand=False).astype(float)
-                    df['Current IPOs'] = df['Current IPOs'].astype(str).str.split('\n').str[0]
-                    df['Date'] = df['Current IPOs'].str.extract(
-                        r'(\d{1,2}-\d{1,2}\s*(?:Dec|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov))')
+                    
+                    # Add missing columns with default values for compatibility
+                    df['Kostak'] = 'N/A'
+                    df['Subject'] = 'N/A' 
+                    df['Type'] = 'Mainline'  # Default type
                     
                     # Remove any rows where all values are NaN
                     df = df.dropna(how='all')
