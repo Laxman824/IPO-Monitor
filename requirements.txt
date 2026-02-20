@@ -8,5 +8,5 @@ html5lib>=1.1
 schedule==1.2.1
 python-dotenv==1.0.0
 twilio==8.10.0
-matplotlib>=3.8.0  <-- ADD THIS LINE
+matplotlib>=3.8.0 
 rich==13.9.4
